@@ -1,11 +1,15 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
-import { WagmiProvider } from "wagmi";
-import { wagmiAdapter } from "./config.js";
+import { AppKitProvider } from "@reown/appkit/react";
+
+// Load environment variable for Project ID
+const PROJECT_ID = "c00145b1e7f8d39d821971d8aeb61276";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
-  <WagmiProvider config={wagmiAdapter.wagmiConfig}>
-    <App />
-  </WagmiProvider>
+  <React.StrictMode>
+    <AppKitProvider projectId={PROJECT_ID}>
+      <App />
+    </AppKitProvider>
+  </React.StrictMode>
 );
