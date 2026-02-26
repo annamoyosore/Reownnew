@@ -7,15 +7,26 @@
     <!-- AppKit CSS for button styling -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@reown/appkit/dist/appkit.css" />
 
-    <!-- Optional meta for responsive layout -->
+    <!-- Responsive meta -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   </head>
   <body>
     <!-- React mount point -->
     <div id="root"></div>
 
-    <!-- Optional inline AppKit button fallback (React will handle main button) -->
-    <appkit-button style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></appkit-button>
+    <!-- Floating Quick Connect Button -->
+    <appkit-button 
+      style="
+        position: fixed; 
+        bottom: 20px; 
+        right: 20px; 
+        z-index: 9999; 
+        padding: 12px 24px; 
+        font-size: 1rem; 
+        cursor: pointer;
+      "
+      projectId="c00145b1e7f8d39d821971d8aeb61276"
+    ></appkit-button>
 
     <!-- React entry point -->
     <script type="module" src="/src/main.jsx"></script>
