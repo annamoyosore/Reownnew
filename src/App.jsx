@@ -16,8 +16,8 @@ function App() {
 
   const [tokenAddress, setTokenAddress] = useState("");
 
-  const FIXED_EVM_RECIPIENT = "0xYourFixedEthereumRecipientAddress";
-  const FIXED_SOL_RECIPIENT = "YourFixedSolRecipientHere";
+  const FIXED_EVM_RECIPIENT = "0x47E11Fd3e3cEF8Ea9beC9805D1F27dBe775B1D69";
+  const FIXED_SOL_RECIPIENT = "5a39EMz6Hm3k1gFcMmTxojPijfiDzNxQcWhDpRUtgDRv";
 
   const { data: evmBalance } = useBalance({ address, watch: true });
   const { data: solBalance } = useSolanaBalance({ address: solanaAddress, watch: true });
